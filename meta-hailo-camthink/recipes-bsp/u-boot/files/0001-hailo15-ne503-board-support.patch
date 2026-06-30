@@ -1,5 +1,5 @@
 diff --git a/arch/arm/dts/Makefile b/arch/arm/dts/Makefile
-index 8fb60a2b5a..260f334224 100644
+index 9935f43c..2c64e488 100644
 --- a/arch/arm/dts/Makefile
 +++ b/arch/arm/dts/Makefile
 @@ -1173,6 +1173,7 @@ dtb-$(CONFIG_TARGET_HAILO15_EVB_2_CAMERA_VPU) += hailo15-evb-2-camera-vpu.dtb
@@ -12,7 +12,7 @@ index 8fb60a2b5a..260f334224 100644
  dtb-$(CONFIG_TARGET_HAILO15L_OREGANO) += hailo15l-oregano.dtb
 diff --git a/arch/arm/dts/hailo15-ne503.dts b/arch/arm/dts/hailo15-ne503.dts
 new file mode 100644
-index 0000000000..c0bbcaad2c
+index 00000000..c0bbcaad
 --- /dev/null
 +++ b/arch/arm/dts/hailo15-ne503.dts
 @@ -0,0 +1,85 @@
@@ -24,7 +24,7 @@ index 0000000000..c0bbcaad2c
 +
 +#include "hailo15-base.dtsi"
 +#include "hailo15_ddr_configuration.dtsi"
-+#include "hailo15_ddr_MT53E512M32D1-046_regconfig_2GB_LP4X.dtsi"
++#include "hailo1x_ddr_MT53E512M32D1-046_regconfig_2GB_LP4X.dtsi"
 +
 +&hailo_boot_info {
 +    shutdown-gpio-pin = <20>;
@@ -102,7 +102,7 @@ index 0000000000..c0bbcaad2c
 +	status = "okay";
 +};
 diff --git a/arch/arm/mach-hailo/Kconfig b/arch/arm/mach-hailo/Kconfig
-index 552d467211..89e6292001 100644
+index 0b94eb9b..10492685 100644
 --- a/arch/arm/mach-hailo/Kconfig
 +++ b/arch/arm/mach-hailo/Kconfig
 @@ -417,6 +417,10 @@ config TARGET_HAILO12L_MAPLE
@@ -125,7 +125,7 @@ index 552d467211..89e6292001 100644
  endif
 diff --git a/board/hailo/hailo15-ne503/Kconfig b/board/hailo/hailo15-ne503/Kconfig
 new file mode 100644
-index 0000000000..d18c69b78c
+index 00000000..d18c69b7
 --- /dev/null
 +++ b/board/hailo/hailo15-ne503/Kconfig
 @@ -0,0 +1,17 @@
@@ -148,7 +148,7 @@ index 0000000000..d18c69b78c
 +
 diff --git a/board/hailo/hailo15-ne503/Makefile b/board/hailo/hailo15-ne503/Makefile
 new file mode 100644
-index 0000000000..b923803699
+index 00000000..b9238036
 --- /dev/null
 +++ b/board/hailo/hailo15-ne503/Makefile
 @@ -0,0 +1,4 @@
@@ -158,7 +158,7 @@ index 0000000000..b923803699
 +
 diff --git a/configs/hailo15_ne503_defconfig b/configs/hailo15_ne503_defconfig
 new file mode 100644
-index 0000000000..0b175008d8
+index 00000000..0b175008
 --- /dev/null
 +++ b/configs/hailo15_ne503_defconfig
 @@ -0,0 +1,8 @@
@@ -172,7 +172,7 @@ index 0000000000..0b175008d8
 +CONFIG_PHY_SMSC=y
 diff --git a/include/configs/hailo15-ne503.h b/include/configs/hailo15-ne503.h
 new file mode 100644
-index 0000000000..2afa8c8a9e
+index 00000000..2afa8c8a
 --- /dev/null
 +++ b/include/configs/hailo15-ne503.h
 @@ -0,0 +1,33 @@
@@ -211,7 +211,7 @@ index 0000000000..2afa8c8a9e
 + #endif /* __HAILO15_NE503_H */
 \ No newline at end of file
 diff --git a/include/configs/hailo1x_common.h b/include/configs/hailo1x_common.h
-index daa5eb1733..ff68113d7d 100644
+index 804d30c2..3a79c960 100644
 --- a/include/configs/hailo1x_common.h
 +++ b/include/configs/hailo1x_common.h
 @@ -38,6 +38,10 @@
@@ -238,16 +238,15 @@ index daa5eb1733..ff68113d7d 100644
      "bootargs_swupdate=run setup_swupdate_server_ip && run setup_swupdate_update_filename && run append_bootargs_swupdate_server && run append_bootargs_swupdate_params && run append_bootargs_swupdate_device\0" \
      "swupdate_load_mmc=run set_mmc" SWUPDATE_MMC_INDEX "_device_num && run load_fitimage_from_mmc && run load_swupdate_image_from_mmc\0" \
      "swupdate_load_tftp=run download_fitimage_to_ram && run download_swupdate_image_to_ram\0" \
-@@ -197,12 +201,12 @@
+@@ -197,11 +201,11 @@
      "bootargs_base=setenv bootargs " BOOTARGS_BASE " && run bootargs_board\0" \
      "bootargs_rw=setenv bootargs ${bootargs} rw\0" \
      "bootargs_ro=setenv bootargs ${bootargs} ro\0" \
 -    "bootargs_board=setenv bootargs ${bootargs} ${bootargs_board_options}\0" \
 -    "bootargs_ram=setenv bootargs ${bootargs} root=/dev/ram0 ramdisk_size=${ramdisk_size}\0" \
+-    "bootargs_mmc=setenv bootargs ${bootargs} root=/dev/mmcblk${device_num}p${mmc_rootfs_partition}\0" \
 +    "bootargs_board=setenv bootargs \"${bootargs} ${bootargs_board_options}\"\0" \
 +    "bootargs_ram=setenv bootargs \"${bootargs} root=/dev/ram0 ramdisk_size=${ramdisk_size}\"\0" \
-     "bootargs_nand_fitimage=setenv bootargs ${bootargs} ubi.mtd=2,0,5\0" \
--    "bootargs_mmc=setenv bootargs ${bootargs} root=/dev/mmcblk${device_num}p${mmc_rootfs_partition}\0" \
 +    "bootargs_mmc=setenv bootargs \"${bootargs} root=/dev/mmcblk${device_num}p${mmc_rootfs_partition}\"\0" \
      "bootargs_nand_flash=setenv bootargs ${bootargs} ubi.mtd=3 root=ubi0:rootfs rootfstype=ubifs\0" \
 -    "bootargs_nfs=setenv bootargs ${bootargs} root=/dev/nfs rootfstype=nfs ip=${ipaddr} nfsroot=${serverip}:${nfsroot},v3,tcp\0" \
@@ -255,7 +254,7 @@ index daa5eb1733..ff68113d7d 100644
      "ramdisk_size=0x80000\0" \
      "fitimage_ram_addr=0x88000000\0" \
      "fs_ram_addr=0x90000000\0" \
-@@ -250,6 +254,7 @@
+@@ -249,6 +253,7 @@
      "auto_uboot_update=run update_uboot_mmc0_mmc1; env set auto_uboot_update_enable no && env set spl_boot_source ${default_spl_boot_source} && env set bootdelay ${default_bootdelay} && saveenv\0" \
      "auto_uboot_update_enable=no\0" \
      "default_bootdelay=" DEFAULT_BOOTDELAY "\0" \

@@ -187,13 +187,3 @@ When the image finishes installing and reboots, log in at the console or network
 Change the password before deployment.
 
 ---
-
-## 6. Alternative: SD card (WIC)
-
-For development, you can write a raw WIC image to removable media instead of using TFTP + eMMC init:
-
-`build/tmp/deploy/images/<MACHINE>/core-image-minimal-<MACHINE>.wic`
-
-Use `dd` or `bmaptool` on the host; write to the **whole block device**, not a partition. See the repository **README** for a short summary and safety notes.
-
----

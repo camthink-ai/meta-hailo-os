@@ -4,9 +4,9 @@ header:
     - target-config/hailo-dev-target-config.yml
 
 target:
-  - core-image-minimal
+  - core-image-hailo-dev
   - hailo-update-image
 
 local_conf_header:
   hailo-target: |
-    HAILO_TARGET = "core-image-minimal"
+    HAILO_TARGET = "core-image-hailo-dev"

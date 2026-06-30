@@ -20,9 +20,7 @@
 ```bash
 git clone https://github.com/camthink-ai/meta-hailo-os.git
 cd meta-hailo-os
-kas checkout kas/hailo15-ne503.yml
-source poky/oe-init-build-env
-bitbake core-image-minimal hailo-update-image
+kas build kas/hailo15-ne503.yml
 ```
 
 ### Toolchain (SDK)
@@ -30,7 +28,7 @@ bitbake core-image-minimal hailo-update-image
 ```bash
 source poky/oe-init-build-env
 # Build SDK for current image
-bitbake core-image-minimal -c populate_sdk
+bitbake core-image-hailo-dev -c populate_sdk
 # Or minimal toolchain only
 bitbake meta-toolchain
 ```

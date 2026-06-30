@@ -4,4 +4,4 @@ header:
   includes:
   - includes/yocto-base.yml
   - includes/hailo15-vpu-base.yml
-  - includes/hailo-soc-target-core-image-minimal.yml
+  - includes/hailo-soc-target-core-image-hailo-dev.yml

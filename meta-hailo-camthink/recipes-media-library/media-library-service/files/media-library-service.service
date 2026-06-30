@@ -1,0 +1,17 @@
+[Unit]
+Description=Hailo Media Library gRPC Service
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/media-library-service.config
+ExecStart=/usr/bin/media_library_service
+Restart=always
+RestartSec=2
+TimeoutStopSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=media-library-service
+
+[Install]
+WantedBy=multi-user.target
