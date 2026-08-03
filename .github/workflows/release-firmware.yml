@@ -1,9 +1,8 @@
 name: Release Firmware
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # Only publish firmware when a GitHub Release is published (or via manual dispatch).
+  # Pushing a tag alone does not upload firmware assets.
   release:
     types:
       - published
