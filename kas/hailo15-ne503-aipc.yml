@@ -4,7 +4,7 @@ header:
 # DDR: edit DDR_PROFILE below (see meta-hailo-camthink/conf/machine/include/ddr-profile.inc).
 local_conf_header:
   ddr-profile: |
-    DDR_PROFILE = "mt53e2g32-8g-lp4"
+    DDR_PROFILE = "h9hcnnncpumlxr-4g-lp4"
 
 repos:
   meta-virtualization:
