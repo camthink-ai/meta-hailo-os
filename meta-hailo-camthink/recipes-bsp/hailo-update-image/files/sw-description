@@ -1,6 +1,6 @@
 software =
 {
-	version = "1.12.0";
+	version = "1.12.1";
 	build-time = "@@AIPC_BUILD_TIME@@";
 	product = "ne503";
 	aipc-compat-level = "1";

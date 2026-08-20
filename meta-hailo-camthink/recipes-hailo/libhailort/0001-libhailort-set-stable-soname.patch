@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursor@example.com>
+Date: Wed, 19 Aug 2026 17:28:00 +0800
+Subject: [PATCH] libhailort: set stable ABI soname
+
+libhailort currently embeds the full product version in SONAME, which makes
+minor releases appear ABI-incompatible even when they are compatible. Restore
+the intended ABI-major SONAME by enabling SOVERSION.
+
+Upstream-Status: Inappropriate [project-specific ABI policy]
+---
+ hailort/libhailort/src/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hailort/libhailort/src/CMakeLists.txt b/hailort/libhailort/src/CMakeLists.txt
+index 6630429..28d27ef 100644
+--- a/hailort/libhailort/src/CMakeLists.txt
++++ b/hailort/libhailort/src/CMakeLists.txt
+@@ -162,7 +162,7 @@ set_target_properties(libhailort PROPERTIES
+     PUBLIC_HEADER "${HAILORT_PUBLIC_HEADERS}"
+     PREFIX ""
+     VERSION ${HAILORT_MAJOR_VERSION}.${HAILORT_MINOR_VERSION}.${HAILORT_REVISION_VERSION}
+-    # SOVERSION ${HAILORT_MAJOR_VERSION}
++    SOVERSION ${HAILORT_MAJOR_VERSION}
+ 
+     CXX_STANDARD              17
+     CXX_STANDARD_REQUIRED     YES
+-- 
+2.43.0

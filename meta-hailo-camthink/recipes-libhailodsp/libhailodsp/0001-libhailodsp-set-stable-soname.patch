@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursor@example.com>
+Date: Wed, 19 Aug 2026 17:20:00 +0800
+Subject: [PATCH] libhailodsp: set stable ABI soname
+
+The library currently embeds the full product version in SONAME, which makes
+minor releases such as 1.12.1 and 1.12.2 appear ABI-incompatible even when
+the interface is unchanged. Set a stable ABI soname so consumers link against
+libhailodsp.so.1 while still installing the fully versioned real file.
+
+Upstream-Status: Inappropriate [project-specific ABI policy]
+---
+ libhailodsp/libhailodsp/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libhailodsp/libhailodsp/CMakeLists.txt b/libhailodsp/libhailodsp/CMakeLists.txt
+index be37eb2..9a89ee1 100644
+--- a/libhailodsp/libhailodsp/CMakeLists.txt
++++ b/libhailodsp/libhailodsp/CMakeLists.txt
+@@ -43,7 +43,7 @@ add_library(
+   src/privacy_mask.cpp
+   src/dsp_direct.cpp)
+ 
+-set_target_properties(hailodsp PROPERTIES VERSION 1.12.1)
++set_target_properties(hailodsp PROPERTIES VERSION 1.12.1 SOVERSION 1)
+ 
+ # cmake-lint: disable=E1120
+ # https://github.com/cheshirekow/cmake_format/issues/218
+-- 
+2.43.0
