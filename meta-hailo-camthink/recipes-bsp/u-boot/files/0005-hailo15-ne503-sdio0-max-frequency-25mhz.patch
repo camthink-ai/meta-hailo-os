@@ -1,0 +1,39 @@
+hailo15-ne503: honor sdio0 max-frequency (25 MHz)
+
+DT alone is not enough on Hailo: snps_sdhci_probe() calls
+sdhci_setup_cfg(..., f_max=0, ...), and sdhci_setup_cfg() then overwrites
+cfg->f_max with host->max_clk whenever the f_max argument is 0. That
+discards the max-frequency parsed by mmc_of_parse().
+
+Pass plat->cfg.f_max into sdhci_setup_cfg() (same pattern as zynq/rockchip
+sdhci drivers) and set max-frequency = 25 MHz on NE503 sdio0 so TF stays
+at HS 25 MHz instead of 50 MHz.
+
+Upstream-Status: Inappropriate [OE-specific]
+
+diff --git a/arch/arm/dts/hailo15-ne503.dts b/arch/arm/dts/hailo15-ne503.dts
+--- a/arch/arm/dts/hailo15-ne503.dts
++++ b/arch/arm/dts/hailo15-ne503.dts
+@@ -36,6 +36,8 @@
+     bus-width = <4>;
+     sd-vsel-gpio-pin = <17>; // GPIO for SD voltage select
+     sd-vsel-polarity-high;
++    /* Cap HS clock for stable TF operation (matches Linux max-frequency) */
++    max-frequency = <25000000>;
+     phy-config {
+             card-is-emmc = <0x0>;
+             cmd-pad-values = <0x1 0x3 0x1 0x1>; // txslew_ctrl_n, txslew_ctrl_p, weakpull_enable, rxsel
+diff --git a/drivers/mmc/snps_sdhci.c b/drivers/mmc/snps_sdhci.c
+--- a/drivers/mmc/snps_sdhci.c
++++ b/drivers/mmc/snps_sdhci.c
+@@ -381,8 +381,9 @@ static int snps_sdhci_probe(struct udevice *dev)
+ 	 */
+ 	host->adma_desc_table_extra_desc = DIV_ROUND_UP(MMC_MAX_BYTES_READ, SZ_128M);
+ 
++	/* Honor DT max-frequency from mmc_of_parse(); 0 keeps HW default */
+ 	ret = sdhci_setup_cfg(&plat->cfg, host,
+-			      0,
++			      plat->cfg.f_max,
+ 				  (host->max_clk / 1023));
+ 	if (ret)
+ 		return ret;
