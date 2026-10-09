@@ -12,6 +12,12 @@ repos:
       meta-oe:
       meta-python:
       meta-multimedia:
+      
+  meta-ros:
+    url: "https://github.com/ros/meta-ros"
+    refspec: 7c3a80c0ef37f97f99ea41080e926043d5585028
+    layers:
+      meta-ros-common:
 
   poky:
     url: "https://git.yoctoproject.org/poky"

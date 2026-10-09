@@ -32,11 +32,22 @@
 
 };
 
+/*
+ * v1.13 base leaves sensor_0 without compatible (filled by U-Boot overlays on
+ * official SBCs). NE503 has no SENSOR_DETECT path yet, and I2C0 0x1a is the
+ * NAU88C10 codec — keep addr 0x10 and restore the 1.12-style candidate list.
+ */
 &sensor_0 {
-    status = "ok";
+	status = "okay";
+	compatible = "sony,imx334", "sony,imx664", "sony,imx675", "sony,imx678", "sony,imx715", "sony,imx307";
 	reg = <0x10>;
-    reset-gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
-    xmaster-gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
+	clock-frequency = <24000000>;
+	reset-gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
+	xmaster-gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
+};
+
+&sensor_out_csi2rx {
+	link-frequencies = /bits/ 64 <720000000 891000000 111370000 1188000000 1440000000 1782000000 222750000>;
 };
 
 &i2c_1 {

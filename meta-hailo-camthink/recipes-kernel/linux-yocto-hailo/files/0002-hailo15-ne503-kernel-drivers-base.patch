@@ -1,5 +1,5 @@
 diff --git a/arch/arm64/boot/dts/hailo/hailo15-ne503.dts b/arch/arm64/boot/dts/hailo/hailo15-ne503.dts
-index 5e8b24f4fb8f..9c49e90b1ec8 100644
+index 5e8b24f4fb8f..4921759d7ef0 100644
 --- a/arch/arm64/boot/dts/hailo/hailo15-ne503.dts
 +++ b/arch/arm64/boot/dts/hailo/hailo15-ne503.dts
 @@ -1,6 +1,9 @@
@@ -13,12 +13,13 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
   */
  
  /dts-v1/;
-@@ -8,569 +11,321 @@
+@@ -8,569 +11,332 @@
  #include <dt-bindings/gpio/gpio.h>
  
  / {
 -    model = "Hailo - Hailo15 ne503 VPU Development Board";
--
++	model = "Hailo - Hailo15 NE503 (AM20-01) VPU Development Board";
+ 
 -    sensor_clk: sensor_clk {
 -        compatible = "fixed-clock";
 -        #clock-cells = <0>;
@@ -28,14 +29,9 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 -        device_type = "memory";
 -        reg = <0x00000000 0x80000000 0x00000001 0x00000000>;
 -    };
-+	model = "Hailo - Hailo15 NE503 (AM20-01) VPU Development Board";
- 
-+	memory {
-+		device_type = "memory";
-+		reg = <0x00 0x00000000 0x02 0x00000000>;
-+	};
- };
- 
+-
+-};
+-
 -&csi2rx0 {
 -    status = "okay";
 -    ports {
@@ -45,17 +41,11 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 -            };
 -        };
 -    };
--};
-+&i2c_0 {
-+	status = "ok";
-+	i2c-sda-falling-time-ns = <1000>;
-+
-+	/* CF66-01: NAU88C10 on H_I2C0; use NAU8810 driver (nuvoton,nau8810) for compatibility */
-+	codec_nau88c10: nau88c10@1a {
-+		#sound-dai-cells = <0>;
-+		compatible = "nuvoton,nau8810", "nuvoton,nau88c10";
-+		reg = <0x1a>;
++	memory {
++		device_type = "memory";
++		reg = <0x00 0x00000000 0x02 0x00000000>;
 +	};
+ };
  
 -&csi2rx1 {
 -    status = "okay";
@@ -107,7 +97,17 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 -            };
 -        };
 -    };
- };
+-};
++&i2c_0 {
++	status = "ok";
++	i2c-sda-falling-time-ns = <1000>;
++
++	/* CF66-01: NAU88C10 on H_I2C0; use NAU8810 driver (nuvoton,nau8810) for compatibility */
++	codec_nau88c10: nau88c10@1a {
++		#sound-dai-cells = <0>;
++		compatible = "nuvoton,nau8810", "nuvoton,nau88c10";
++		reg = <0x1a>;
++	};
  
 -&hailo_isp {
 -    ports {
@@ -133,11 +133,6 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 -            };
 -        };
 -    };
-+&sensor_0 {
-+    status = "ok";
-+	reg = <0x10>;
-+    reset-gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
-+    xmaster-gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
  };
  
 -&hailo_vid_cap {
@@ -215,18 +210,23 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 -            };
 -        };
 -    };
--};
-+&i2c_1 {
-+	status = "ok";
-+	i2c-sda-falling-time-ns = <1000>;
++/*
++ * v1.13 base leaves sensor_0 without compatible (filled by U-Boot overlays on
++ * official SBCs). NE503 has no SENSOR_DETECT path yet, and I2C0 0x1a is the
++ * NAU88C10 codec — keep addr 0x10 and restore the 1.12-style candidate list.
++ */
++&sensor_0 {
++	status = "okay";
++	compatible = "sony,imx334", "sony,imx664", "sony,imx675", "sony,imx678", "sony,imx715", "sony,imx307";
++	reg = <0x10>;
++	clock-frequency = <24000000>;
++	reset-gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
++	xmaster-gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
+ };
  
 -&i2c_0 {
 -    status = "ok";
-+	tmp1075_temp: tmp1075@49 {
-+		compatible = "ti,tmp1075";
-+		reg = <0x49>;
-+	};
- 
+-
 -    sensor_0: camera-sensor@1a {
 -        status = "ok";
 -        compatible = "sony,imx334", "sony,imx664", "sony,imx675", "sony,imx678", "sony,imx715";
@@ -245,13 +245,11 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 -            };
 -        };
 -     };
-+	eeprom: eeprom@50 {
-+		compatible = "atmel,24c02";
-+		reg = <0x50>;
-+	};
++&sensor_out_csi2rx {
++	link-frequencies = /bits/ 64 <720000000 891000000 111370000 1188000000 1440000000 1782000000 222750000>;
  };
  
--&i2c_1 {
+ &i2c_1 {
 -    status = "ok";
 -    ina231_1v8: 1v8@40 {
 -        compatible = "ti,ina231_precise";
@@ -289,26 +287,21 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 -		DRVDD-supply = <&regulator_3p3v>;
 -		DVDD-supply = <&regulator_1p8v>;
 -    };
-+&i2c_2 {
-+	status = "okay";
-+	i2c-sda-falling-time-ns = <190>;
-+	clock-frequency = <400000>;
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&pinctrl_i2c2>;
-+	gyro_lsm6dsr: lsm6dsr@6a {
-+		status = "okay";
-+		compatible = "st,lsm6dsr";
-+		reg = <0x6a>;
-+		vdd-supply = <&regulator_1p8v>;
-+		vddio-supply = <&regulator_1p8v>;
-+		interrupt-parent = <&gpio1>;
-+		interrupts = <11 IRQ_TYPE_LEVEL_HIGH>;
-+		pinctrl-names = "default";
-+		pinctrl-0 = <&pinctrl_gpio27>;
++	status = "ok";
++	i2c-sda-falling-time-ns = <1000>;
++
++	tmp1075_temp: tmp1075@49 {
++		compatible = "ti,tmp1075";
++		reg = <0x49>;
++	};
++
++	eeprom: eeprom@50 {
++		compatible = "atmel,24c02";
++		reg = <0x50>;
 +	};
  };
  
--&i2c_2 {
+ &i2c_2 {
 -    status = "okay";
 -    pinctrl-names = "default";
 -    pinctrl-0 = <&pinctrl_i2c2>, <&pinctrl_i2c2_current_src_en_out>;
@@ -355,6 +348,24 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 -        interrupts = <5 IRQ_TYPE_EDGE_RISING>;
 -        pinctrl-names = "default";
 -        pinctrl-0 = <&pinctrl_gpio21>;
++	status = "okay";
++	i2c-sda-falling-time-ns = <190>;
++	clock-frequency = <400000>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&pinctrl_i2c2>;
++	gyro_lsm6dsr: lsm6dsr@6a {
++		status = "okay";
++		compatible = "st,lsm6dsr";
++		reg = <0x6a>;
++		vdd-supply = <&regulator_1p8v>;
++		vddio-supply = <&regulator_1p8v>;
++		interrupt-parent = <&gpio1>;
++		interrupts = <11 IRQ_TYPE_LEVEL_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pinctrl_gpio27>;
++	};
++};
++
 +&csi2rx0 {
 +	status = "ok";
 +	ports {
@@ -438,8 +449,8 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 +		sdclkdl-cnfg = <0x1 0x13>;
 +		drive-strength = <0x8 0x4>;
 +	};
- };
- 
++};
++
 +&sdio1 {
 +	status = "okay";
 +	non-removable;
@@ -453,8 +464,8 @@ index 5e8b24f4fb8f..9c49e90b1ec8 100644
 +		sdclkdl-cnfg = <0x0 0x2C>;
 +		drive-strength = <0x9 0x7>;
 +	};
-+};
-+
+ };
+ 
 +/* AM20-01: RMII + LAN8720AI (actual PHY address 0x01 confirmed via MDIO scan) */
  &eth {
 -    status = "ok";

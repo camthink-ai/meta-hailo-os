@@ -17,7 +17,7 @@ local_conf_header:
 repos:
   meta-hailo-soc:
     url: https://github.com/hailo-ai/meta-hailo-soc
-    tag: v1.12.1
+    tag: v1.13.0
     layers:
       meta-hailo-bsp:
       meta-hailo-bsp-examples:
@@ -28,7 +28,7 @@ repos:
 
   meta-hailo:
     url: "https://github.com/hailo-ai/meta-hailo.git"
-    branch: kirkstone-v5.3.0
+    tag: kirkstone_v5.4.0-r1
     layers:
       meta-hailo-libhailort:
       meta-hailo-vpu:

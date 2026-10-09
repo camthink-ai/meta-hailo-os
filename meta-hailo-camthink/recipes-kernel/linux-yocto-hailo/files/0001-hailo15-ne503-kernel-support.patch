@@ -1,5 +1,5 @@
 diff --git a/arch/arm64/boot/dts/hailo/Makefile b/arch/arm64/boot/dts/hailo/Makefile
-index 11aeb43881ac..977464860ef3 100644
+index 69eafe0fcf28..e9d2732a9a08 100644
 --- a/arch/arm64/boot/dts/hailo/Makefile
 +++ b/arch/arm64/boot/dts/hailo/Makefile
 @@ -16,6 +16,7 @@ dtb-$(CONFIG_ARCH_HAILO15) += hailo15l-evb.dtb
@@ -7,9 +7,9 @@ index 11aeb43881ac..977464860ef3 100644
  dtb-$(CONFIG_ARCH_HAILO15) += hailo15l-sbc-1gb.dtb
  dtb-$(CONFIG_ARCH_HAILO15) += hailo15-sbc.dtb
 +dtb-$(CONFIG_ARCH_HAILO15) += hailo15-ne503.dtb
+ dtb-$(CONFIG_ARCH_HAILO15) += hailo15-sv4e.dtbo
  dtb-$(CONFIG_ARCH_HAILO15) += hailo15-sbc-rev3.dtb
  dtb-$(CONFIG_ARCH_HAILO15) += hailo15-sbc-rev3-1.dtb
- dtb-$(CONFIG_ARCH_HAILO15) += hailo10-board-sku-0.dtb
 diff --git a/arch/arm64/boot/dts/hailo/hailo15-ne503.dts b/arch/arm64/boot/dts/hailo/hailo15-ne503.dts
 new file mode 100644
 index 000000000000..5e8b24f4fb8f
