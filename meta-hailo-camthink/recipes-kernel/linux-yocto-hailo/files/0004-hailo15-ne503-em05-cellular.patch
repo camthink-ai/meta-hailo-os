@@ -1,0 +1,140 @@
+diff --git a/arch/arm64/boot/dts/hailo/hailo15-ne503.dts b/arch/arm64/boot/dts/hailo/hailo15-ne503.dts
+--- a/arch/arm64/boot/dts/hailo/hailo15-ne503.dts
++++ b/arch/arm64/boot/dts/hailo/hailo15-ne503.dts
+@@ -3,6 +3,9 @@
+  * Hailo15 NE503 (AM20-01-V1.0), aligned to hailo15-sbc-rev3-1.
+  * With interface board CF66-01-V1.0: TF card on SDIO0 (VDD_SDCARD select on GPIO17),
+  * NAU88C10 audio on I2C0 + I2S (H_I2C0_*, H_I2S_*).
++ * Cellular (M.2 + Quectel EM05-CN/E/G): USB2.0 data; GPIO23 module power
++ *   (H=ON), GPIO21 host reset (active-low), GPIO22 module wake-host
++ *   (active-low, PU 1.8V). GPIOs left free for userspace power sequencing.
+  * Copyright (c) 2019-2025 Hailo Technologies Ltd. All rights reserved.
+  */
+ 
+@@ -264,13 +267,28 @@
+ 		groups = "usb_drive_vbus_out_2_grp";
+ 	};
+ 
++	pinctrl_gpio21: gpio21 {
++		function = "gpio";
++		groups = "gpio21_grp";
++	};
++
++	pinctrl_gpio22: gpio22 {
++		function = "gpio";
++		groups = "gpio22_grp";
++	};
++
++	pinctrl_gpio23: gpio23 {
++		function = "gpio";
++		groups = "gpio23_grp";
++	};
++
+ 	pinctrl_gpio27: gpio27 {
+ 		function = "gpio";
+ 		groups = "gpio27_grp";
+ 	};
+ };
+ 
+-/* AM20-01/CF66: pin names; GPIO17 = sdcard_vdd_sel (CF66 TF card) */
++/* AM20-01/CF66 + cellular: GPIO17 = sdcard_vdd_sel; GPIO21/22/23 = EM05 */
+ #define GPIO_LINE_NAMES \
+ 	"gpio_in_out_0",            "gpio_in_out_1",            "gpio_in_out_2",            "gpio_in_out_3", \
+ 	"gpio_in_out_4",            "gpio_in_out_5",            "gpio_in_out_6",            "gpio_in_out_7", \
+@@ -278,9 +296,9 @@
+ 	"usb_drive_vbus_out",       "sdio1_gp_in",              "sdio1_cd_in_n",            "PCIe_mperst_out", \
+ 	\
+ 	"gpio_in_out_16",           "sdcard_vdd_sel",            "timer_ext_in0",            "timer_ext_in1", \
+-	"shut_down_out",            "user_LED",                 "gpio_in_out_22",           "gpio_in_out_23", \
++	"shut_down_out",            "wwan_reset_n",             "wwan_wake_host_n",         "wwan_pwr_on", \
+ 	"i2c2_current_src_en_out",  "i2c0_current_src_en_out",  "i2c1_current_src_en_out",  "gyro_int", \
+-	"ir_cut_en",                "gpio_in_out_29",           "uart0_cts_pad_in",         "uart0_rts_pad_out"
++	"ir_cut_en",                "soft_reset_n",             "uart0_cts_pad_in",         "uart0_rts_pad_out"
+ 
+ &gpio0 {
+ 	gpio-ranges = <&pinctrl 0 0 16>;
+@@ -298,6 +316,13 @@
+ &gpio1 {
+ 	gpio-ranges = <&pinctrl 0 16 16>;
+ 	gpio-line-names = GPIO_LINE_NAMES;
++	/*
++	 * EM05 (CN/E/G): GPIO21/22/23 named for userspace (gpio1 offsets
++	 * 5/6/7). Do NOT attach pinctrl-0 here — Hailo pinmux is strict; a
++	 * default state on the gpio controller claims the pins and blocks
++	 * gpiod/gpioset (gpioinfo shows "kernel input [used]"). Mux to GPIO
++	 * happens on request via gpiochip_generic_request.
++	 */
+ };
+ 
+ &hailo_torrent_phy {
+diff --git a/drivers/usb/serial/option.c b/drivers/usb/serial/option.c
+--- a/drivers/usb/serial/option.c
++++ b/drivers/usb/serial/option.c
+@@ -252,6 +252,15 @@
+ #define QUECTEL_PRODUCT_EG95			0x0195
+ #define QUECTEL_PRODUCT_BG96			0x0296
+ #define QUECTEL_PRODUCT_EP06			0x0306
++#define QUECTEL_PRODUCT_EM05E			0x0309	/* EM05-E */
++#define QUECTEL_PRODUCT_EM05G			0x030a
++#define QUECTEL_PRODUCT_EM05G_CS		0x030c
++#define QUECTEL_PRODUCT_EM05GV2			0x030e
++#define QUECTEL_PRODUCT_EM05CN_SG		0x0310
++#define QUECTEL_PRODUCT_EM05G_SG		0x0311
++#define QUECTEL_PRODUCT_EM05CN			0x0312
++#define QUECTEL_PRODUCT_EM05G_GR		0x0313
++#define QUECTEL_PRODUCT_EM05G_RS		0x0314
+ #define QUECTEL_PRODUCT_EM12			0x0512
+ #define QUECTEL_PRODUCT_RM500Q			0x0800
+ #define QUECTEL_PRODUCT_EC200S_CN		0x6002
+@@ -1130,6 +1139,25 @@
+ 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EP06, 0xff, 0xff, 0xff),
+ 	  .driver_info = RSVD(1) | RSVD(2) | RSVD(3) | RSVD(4) | NUMEP2 },
+ 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EP06, 0xff, 0, 0) },
++	/* Quectel EM05-CN/E/G (M.2). Mainline USB-serial style; EM05-E (0x0309) added. */
++	{ USB_DEVICE_INTERFACE_CLASS(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM05E, 0xff),
++	  .driver_info = RSVD(6) | ZLP },
++	{ USB_DEVICE_INTERFACE_CLASS(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM05CN, 0xff),
++	  .driver_info = RSVD(6) | ZLP },
++	{ USB_DEVICE_INTERFACE_CLASS(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM05CN_SG, 0xff),
++	  .driver_info = RSVD(6) | ZLP },
++	{ USB_DEVICE_INTERFACE_CLASS(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM05G, 0xff),
++	  .driver_info = RSVD(6) | ZLP },
++	{ USB_DEVICE_INTERFACE_CLASS(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM05GV2, 0xff),
++	  .driver_info = RSVD(4) | ZLP },
++	{ USB_DEVICE_INTERFACE_CLASS(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM05G_CS, 0xff),
++	  .driver_info = RSVD(6) | ZLP },
++	{ USB_DEVICE_INTERFACE_CLASS(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM05G_GR, 0xff),
++	  .driver_info = RSVD(6) | ZLP },
++	{ USB_DEVICE_INTERFACE_CLASS(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM05G_RS, 0xff),
++	  .driver_info = RSVD(6) | ZLP },
++	{ USB_DEVICE_INTERFACE_CLASS(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM05G_SG, 0xff),
++	  .driver_info = RSVD(6) | ZLP },
+ 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM12, 0xff, 0xff, 0xff),
+ 	  .driver_info = RSVD(1) | RSVD(2) | RSVD(3) | RSVD(4) | NUMEP2 },
+ 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EM12, 0xff, 0, 0) },
+diff --git a/drivers/net/usb/qmi_wwan.c b/drivers/net/usb/qmi_wwan.c
+--- a/drivers/net/usb/qmi_wwan.c
++++ b/drivers/net/usb/qmi_wwan.c
+@@ -1082,6 +1082,14 @@
+ 	},
+ 	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0125)},	/* Quectel EC25, EC20 R2.0  Mini PCIe */
+ 	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0306)},	/* Quectel EP06/EG06/EM06 */
++	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0309)},	/* Quectel EM05-E (QMI usbnet mode) */
++	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x030a)},	/* Quectel EM05-G */
++	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x030c)},	/* Quectel EM05-G CS */
++	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0310)},	/* Quectel EM05-CN SG */
++	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0311)},	/* Quectel EM05-G SG */
++	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0312)},	/* Quectel EM05-CN */
++	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0313)},	/* Quectel EM05-G GR */
++	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0314)},	/* Quectel EM05-G RS */
+ 	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0512)},	/* Quectel EG12/EM12 */
+ 	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0620)},	/* Quectel EM160R-GL */
+ 	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0800)},	/* Quectel RM500Q-GL */
+@@ -1405,6 +1413,7 @@
+ 	{QMI_QUIRK_SET_DTR(0x2c7c, 0x0191, 4)},	/* Quectel EG91 */
+ 	{QMI_QUIRK_SET_DTR(0x2c7c, 0x0195, 4)},	/* Quectel EG95 */
+ 	{QMI_FIXED_INTF(0x2c7c, 0x0296, 4)},	/* Quectel BG96 */
++	{QMI_QUIRK_SET_DTR(0x2c7c, 0x030e, 4)},	/* Quectel EM05GV2 */
+ 	{QMI_QUIRK_SET_DTR(0x2cb7, 0x0104, 4)},	/* Fibocom NL678 series */
+ 	{QMI_FIXED_INTF(0x0489, 0xe0b4, 0)},	/* Foxconn T77W968 LTE */
+ 	{QMI_FIXED_INTF(0x0489, 0xe0b5, 0)},	/* Foxconn T77W968 LTE with eSIM support*/

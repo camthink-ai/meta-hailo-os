@@ -20,6 +20,8 @@ RDEPENDS:${PN}-system = " \
     factory-eeprom-tool \
     u-boot-fw-utils \
     aipc-bootstrap \
+    quectel-cm \
+    camthink-rootfs \
 "
 
 # Part 2: CamThink AIPC application

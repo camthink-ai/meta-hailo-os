@@ -1,0 +1,611 @@
+#!/bin/sh
+# CamThink NE503 cellular (Quectel EM05) helper for bring-up / recovery.
+# Defaults match configs/cellular-hw.yaml (gpiochip1: pwr=7, reset=5).
+# Prefer platform-api for production; this tool is for shell/debug.
+
+set -eu
+
+CHIP="${CELLULAR_GPIO_CHIP:-gpiochip1}"
+PWR_OFFSET="${CELLULAR_PWR_OFFSET:-7}"
+RST_OFFSET="${CELLULAR_RST_OFFSET:-5}"
+PWR_ACTIVE_HIGH="${CELLULAR_PWR_ACTIVE_HIGH:-1}"
+RST_ACTIVE_LOW="${CELLULAR_RST_ACTIVE_LOW:-1}"
+RUN_DIR="${CELLULAR_RUN_DIR:-/run/aipc}"
+CFG_JSON="${CELLULAR_CONFIG:-/data/aipc/etc/cellular.json}"
+PWR_PID_FILE="${RUN_DIR}/cellular-pwr.pid"
+DIAL_PID_FILE="${RUN_DIR}/cellular-dialer.pid"
+VENDOR="${CELLULAR_USB_VENDOR:-2c7c}"
+# Optional fixed AT port; empty → auto-probe ttyUSB*/ttyACM*
+AT_PORT="${CELLULAR_AT_PORT:-}"
+AT_BAUD="${CELLULAR_AT_BAUD:-115200}"
+AT_TIMEOUT_SEC="${CELLULAR_AT_TIMEOUT:-2}"
+
+usage() {
+	cat <<'EOF'
+Usage: ct-cell <command> [args]
+
+Commands:
+  status              Module USB, GPIOs, AT/SIM, dialer, and net ifaces
+  power on|off        Hold WWAN power GPIO (libgpiod v1 gpioset -m signal)
+  reset               Pulse reset (active-low deassert then assert brief)
+  dial [options] [-- quectel-CM-args...]
+  hangup              Stop quectel-CM / dialer pid
+  at [CMD...]         Send AT command(s); default AT. Auto-finds AT port.
+  sim                 Query SIM via AT+CPIN? (and COPS/QCSQ when possible)
+  help
+
+dial options (override /data/aipc/etc/cellular.json when set):
+  --apn <name>              APN (use '' or --no-apn for empty; no auto-fill)
+  --no-apn                  Force empty APN (omit quectel-CM -s)
+  --user <user>             auth user
+  --password <pass>         auth password
+  --auth none|pap|chap      auth type (default none)
+  --ip-type ipv4|ipv6|ipv4v6
+  --cid <n>                 PDP/PDN context (-n)
+  --          remaining args passed through to quectel-CM
+
+Examples:
+  ct-cell at
+  ct-cell at AT+CPIN?
+  ct-cell at AT+COPS?
+  ct-cell sim
+  ct-cell dial --no-apn
+  ct-cell dial --apn 3gnet
+
+Env overrides:
+  CELLULAR_GPIO_CHIP CELLULAR_PWR_OFFSET CELLULAR_RST_OFFSET
+  CELLULAR_CONFIG CELLULAR_RUN_DIR
+  CELLULAR_AT_PORT CELLULAR_AT_BAUD CELLULAR_AT_TIMEOUT
+EOF
+}
+
+need_root() {
+	if [ "$(id -u)" -ne 0 ]; then
+		echo "ct-cell: root required" >&2
+		exit 1
+	fi
+}
+
+ensure_run_dir() {
+	mkdir -p "$RUN_DIR"
+}
+
+gpio_value_for_on() {
+	# $1 = logical on (1) / off (0); emit raw gpioset level for power line
+	on="$1"
+	if [ "$PWR_ACTIVE_HIGH" = "1" ]; then
+		echo "$on"
+	else
+		if [ "$on" = "1" ]; then echo 0; else echo 1; fi
+	fi
+}
+
+kill_pidfile() {
+	f="$1"
+	if [ -f "$f" ]; then
+		pid=$(cat "$f" 2>/dev/null || true)
+		if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
+			kill "$pid" 2>/dev/null || true
+			# wait briefly
+			i=0
+			while [ "$i" -lt 20 ] && kill -0 "$pid" 2>/dev/null; do
+				i=$((i + 1))
+				sleep 0.1
+			done
+			kill -9 "$pid" 2>/dev/null || true
+		fi
+		rm -f "$f"
+	fi
+}
+
+# Stop any prior hold so the pin does not float after release.
+release_power_hold() {
+	kill_pidfile "$PWR_PID_FILE"
+	# Also kill orphaned gpioset on our power line if pidfile missing.
+	# BusyBox ps: use ps aux.
+	ps aux 2>/dev/null | awk -v chip="$CHIP" -v off="$PWR_OFFSET" '
+		$0 ~ /gpioset/ && $0 ~ chip && $0 ~ (off "=") { print $2 }
+	' | while read -r p; do
+		[ -n "$p" ] && kill "$p" 2>/dev/null || true
+	done
+}
+
+cmd_power() {
+	need_root
+	ensure_run_dir
+	case "${1:-}" in
+	on|off) ;;
+	*)
+		echo "usage: ct-cell power on|off" >&2
+		exit 1
+		;;
+	esac
+	logical=0
+	[ "$1" = "on" ] && logical=1
+	level=$(gpio_value_for_on "$logical")
+
+	release_power_hold
+	# libgpiod v1: numeric offset only; -m signal holds until killed.
+	gpioset -m signal "${CHIP}" "${PWR_OFFSET}=${level}" &
+	echo $! >"$PWR_PID_FILE"
+	echo "power $1 held via ${CHIP} ${PWR_OFFSET}=${level} pid=$(cat "$PWR_PID_FILE")"
+}
+
+cmd_reset() {
+	need_root
+	# Active-low reset: inactive=1, assert=0. Pulse assert ~100ms then release.
+	if [ "$RST_ACTIVE_LOW" = "1" ]; then
+		inactive=1
+		active=0
+	else
+		inactive=0
+		active=1
+	fi
+	gpioset "${CHIP}" "${RST_OFFSET}=${inactive}" || true
+	sleep 0.05
+	gpioset "${CHIP}" "${RST_OFFSET}=${active}"
+	sleep 0.1
+	gpioset "${CHIP}" "${RST_OFFSET}=${inactive}"
+	echo "reset pulsed on ${CHIP} offset ${RST_OFFSET}"
+}
+
+json_get() {
+	# Minimal extractor: "key": value  (string or number). No jq dependency.
+	key="$1"
+	file="$2"
+	[ -f "$file" ] || return 0
+	sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p; s/.*\"${key}\"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p" "$file" | head -n1
+}
+
+# Globals filled by parse_dial_opts (CLI overrides JSON).
+DIAL_APN=""
+DIAL_APN_SET=0
+DIAL_USER=""
+DIAL_PASS=""
+DIAL_AUTH=""
+DIAL_IP_TYPE=""
+DIAL_CID=""
+DIAL_EXTRA=""
+
+parse_dial_opts() {
+	DIAL_APN=""
+	DIAL_APN_SET=0
+	DIAL_USER=""
+	DIAL_PASS=""
+	DIAL_AUTH=""
+	DIAL_IP_TYPE=""
+	DIAL_CID=""
+	DIAL_EXTRA=""
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+		--no-apn)
+			DIAL_APN=""
+			DIAL_APN_SET=1
+			shift
+			;;
+		--apn)
+			# Allow empty: --apn '' or --apn ""
+			DIAL_APN="${2-}"
+			DIAL_APN_SET=1
+			shift 2
+			;;
+		--user)
+			DIAL_USER="${2:-}"; shift 2 ;;
+		--password)
+			DIAL_PASS="${2:-}"; shift 2 ;;
+		--auth)
+			DIAL_AUTH="${2:-}"; shift 2 ;;
+		--ip-type)
+			DIAL_IP_TYPE="${2:-}"; shift 2 ;;
+		--cid)
+			DIAL_CID="${2:-}"; shift 2 ;;
+		--)
+			shift
+			DIAL_EXTRA="$*"
+			break
+			;;
+		-*)
+			echo "ct-cell dial: unknown option: $1" >&2
+			echo "Use -- to pass raw quectel-CM flags, e.g. dial --no-apn -- -v" >&2
+			exit 1
+			;;
+		*)
+			# Bare tokens treated as passthrough to quectel-CM
+			DIAL_EXTRA="$*"
+			break
+			;;
+		esac
+	done
+}
+
+build_dial_args() {
+	apn=$(json_get apn "$CFG_JSON")
+	user=$(json_get user "$CFG_JSON")
+	pass=$(json_get password "$CFG_JSON")
+	auth=$(json_get auth "$CFG_JSON")
+	ip_type=$(json_get ip_type "$CFG_JSON")
+	pdp_cid=$(json_get pdp_cid "$CFG_JSON")
+
+	# CLI wins, including explicit empty APN (--apn '' / --no-apn).
+	if [ "$DIAL_APN_SET" = "1" ]; then
+		apn="$DIAL_APN"
+	fi
+	[ -n "$DIAL_USER" ] && user="$DIAL_USER"
+	[ -n "$DIAL_PASS" ] && pass="$DIAL_PASS"
+	[ -n "$DIAL_AUTH" ] && auth="$DIAL_AUTH"
+	[ -n "$DIAL_IP_TYPE" ] && ip_type="$DIAL_IP_TYPE"
+	[ -n "$DIAL_CID" ] && pdp_cid="$DIAL_CID"
+
+	# Empty APN is valid (module/network default). Do NOT fill internet/vzwinternet.
+	[ -n "$auth" ] || auth=none
+	[ -n "$ip_type" ] || ip_type=ipv4v6
+	[ -n "$pdp_cid" ] || pdp_cid=1
+
+	set --
+	if [ -n "$apn" ]; then
+		set -- -s "$apn"
+		if [ "$auth" != "none" ]; then
+			a=0
+			case "$auth" in
+			pap) a=1 ;;
+			chap) a=2 ;;
+			*)
+				echo "ct-cell: --auth must be none|pap|chap" >&2
+				exit 1
+				;;
+			esac
+			set -- "$@" "${user:-}" "${pass:-}" "$a"
+		fi
+	elif [ "$auth" != "none" ]; then
+		# Auth without APN: still need -s with empty apn slot.
+		a=0
+		case "$auth" in
+		pap) a=1 ;;
+		chap) a=2 ;;
+		*)
+			echo "ct-cell: --auth must be none|pap|chap" >&2
+			exit 1
+			;;
+		esac
+		set -- -s "" "${user:-}" "${pass:-}" "$a"
+	fi
+	# else: omit -s entirely → quectel-CM uses modem default APN
+
+	case "$ip_type" in
+	ipv4) set -- "$@" -4 ;;
+	ipv6) set -- "$@" -6 ;;
+	ipv4v6) set -- "$@" -4 -6 ;;
+	*)
+		echo "ct-cell: --ip-type must be ipv4|ipv6|ipv4v6" >&2
+		exit 1
+		;;
+	esac
+	set -- "$@" -n "$pdp_cid"
+	# shellcheck disable=SC2086
+	echo "$@"
+}
+
+cmd_dial() {
+	need_root
+	ensure_run_dir
+	if ! command -v quectel-CM >/dev/null 2>&1; then
+		echo "ct-cell: quectel-CM not found" >&2
+		exit 1
+	fi
+	parse_dial_opts "$@"
+	kill_pidfile "$DIAL_PID_FILE"
+	# shellcheck disable=SC2046
+	args=$(build_dial_args)
+	# shellcheck disable=SC2086
+	quectel-CM $args $DIAL_EXTRA >/dev/null 2>&1 &
+	echo $! >"$DIAL_PID_FILE"
+	echo "dialer started pid=$(cat "$DIAL_PID_FILE") args: quectel-CM $args $DIAL_EXTRA"
+}
+
+cmd_hangup() {
+	need_root
+	kill_pidfile "$DIAL_PID_FILE"
+	killall quectel-CM 2>/dev/null || true
+	killall quectel-cm 2>/dev/null || true
+	echo "dialer stopped"
+}
+
+usb_present() {
+	found=0
+	for d in /sys/bus/usb/devices/*; do
+		[ -f "$d/idVendor" ] || continue
+		v=$(cat "$d/idVendor" 2>/dev/null || true)
+		[ "$v" = "$VENDOR" ] || continue
+		p=$(cat "$d/idProduct" 2>/dev/null || true)
+		echo "usb: $v:$p ($d)"
+		found=1
+	done
+	[ "$found" = "1" ] || echo "usb: no Quectel ($VENDOR) device"
+}
+
+# --- AT port auto-discovery and exchange ---------------------------------
+
+at_list_candidate_ports() {
+	# Prefer USB serial then ACM. Skip if not a char device.
+	for p in /dev/ttyUSB* /dev/ttyACM*; do
+		[ -c "$p" ] || continue
+		echo "$p"
+	done
+}
+
+at_configure_port() {
+	port="$1"
+	stty -F "$port" "$AT_BAUD" raw -echo -echoe -echok \
+		ignbrk -brkint -icrnl -imaxbel -opost -onlcr -isig -icanon \
+		-iexten -echoctl -echoke 2>/dev/null || return 1
+	# Drain stale input (best-effort).
+	if command -v timeout >/dev/null 2>&1; then
+		timeout 0.2 cat "$port" >/dev/null 2>&1 || true
+	fi
+	return 0
+}
+
+# Send one AT command; print modem reply to stdout. Returns 0 if OK seen.
+at_exchange() {
+	port="$1"
+	cmd="$2"
+	at_configure_port "$port" || return 1
+	# shellcheck disable=SC2059
+	printf "%s\r" "$cmd" >"$port" || return 1
+
+	resp=""
+	if command -v timeout >/dev/null 2>&1; then
+		# Collect until timeout; strip CR.
+		resp=$(timeout "$AT_TIMEOUT_SEC" cat "$port" 2>/dev/null | tr -d '\r' || true)
+	else
+		# Fallback: short blocking read via dd
+		resp=$(dd if="$port" bs=256 count=4 2>/dev/null | tr -d '\r' || true)
+	fi
+	printf '%s' "$resp"
+	echo
+	echo "$resp" | grep -qE '(^|[^A-Z])OK([^A-Z]|$)' 
+}
+
+# Probe ports; print first that answers AT with OK. Caches in AT_PORT.
+find_at_port() {
+	if [ -n "$AT_PORT" ] && [ -c "$AT_PORT" ]; then
+		if at_exchange "$AT_PORT" "AT" >/dev/null 2>&1; then
+			echo "$AT_PORT"
+			return 0
+		fi
+		# Fixed port set but not responding — still return it for diagnostics.
+		echo "$AT_PORT"
+		return 1
+	fi
+	for p in $(at_list_candidate_ports); do
+		if at_exchange "$p" "AT" >/dev/null 2>&1; then
+			AT_PORT="$p"
+			echo "$p"
+			return 0
+		fi
+	done
+	return 1
+}
+
+cmd_at() {
+	need_root
+	if [ "$#" -eq 0 ]; then
+		set -- AT
+	fi
+	port=$(find_at_port) || {
+		echo "ct-cell: no AT port (module down or CELLULAR_AT_PORT wrong)" >&2
+		echo "  tried: ${AT_PORT:-$(at_list_candidate_ports | tr '\n' ' ')}" >&2
+		exit 1
+	}
+	echo "at: port=$port"
+	ec=0
+	for cmd in "$@"; do
+		# Allow "AT+CPIN?" or bare "+CPIN?" → prefix AT
+		case "$cmd" in
+		AT*|at*) ;;
+		*) cmd="AT$cmd" ;;
+		esac
+		echo ">>> $cmd"
+		if ! at_exchange "$port" "$cmd"; then
+			ec=1
+		fi
+		echo
+	done
+	return "$ec"
+}
+
+cmd_sim() {
+	need_root
+	port=$(find_at_port) || {
+		echo "sim: no AT port — module not on USB or AT interface missing"
+		echo "sim_ready: unknown"
+		return 1
+	}
+	echo "at: port=$port"
+	cpin=$(at_exchange "$port" "AT+CPIN?" 2>/dev/null || true)
+	echo "$cpin"
+	case "$cpin" in
+	*READY*)
+		echo "sim_ready: yes"
+		;;
+	*"SIM PIN"*|*"SIM PUK"*)
+		echo "sim_ready: no (PIN/PUK required)"
+		;;
+	*)
+		echo "sim_ready: no"
+		;;
+	esac
+	# Best-effort extras (ignore failures).
+	echo "---"
+	at_exchange "$port" "AT+COPS?" 2>/dev/null || true
+	echo
+	at_exchange "$port" "AT+QCSQ" 2>/dev/null || at_exchange "$port" "AT+CSQ" 2>/dev/null || true
+	echo
+}
+
+# Find gpioset holding CHIP OFFSET; print "pid raw" or empty.
+find_gpioset_hold() {
+	offset="$1"
+	# Prefer pidfile when it matches this offset.
+	if [ -f "$PWR_PID_FILE" ]; then
+		pid=$(cat "$PWR_PID_FILE" 2>/dev/null || true)
+		if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+			cmd=$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)
+			case "$cmd" in
+			*"${CHIP}"*"${offset}="*|*"${offset}="*"${CHIP}"*)
+				raw=$(echo "$cmd" | sed -n "s/.*${offset}=\([01]\).*/\1/p" | head -n1)
+				if [ -n "$raw" ]; then
+					echo "$pid $raw"
+					return 0
+				fi
+				;;
+			esac
+		fi
+	fi
+	# Scan all gpioset processes for this chip/offset.
+	ps aux 2>/dev/null | awk -v chip="$CHIP" -v off="$offset" '
+		$0 !~ /gpioset/ { next }
+		$0 !~ chip { next }
+		$0 !~ (off "=") { next }
+		{
+			pid=$2
+			raw=""
+			for (i=1; i<=NF; i++) {
+				if ($i ~ ("^" off "=")) {
+					split($i, a, "=")
+					raw=a[2]
+				}
+			}
+			if (raw != "") { print pid, raw; exit }
+		}
+	'
+}
+
+# Read line level: prefer gpioset cmdline (line busy), else gpioget.
+gpio_raw_level() {
+	offset="$1"
+	hold=$(find_gpioset_hold "$offset" || true)
+	if [ -n "$hold" ]; then
+		echo "$hold" | awk '{print $2}'
+		return 0
+	fi
+	if command -v gpioget >/dev/null 2>&1; then
+		gpioget "$CHIP" "$offset" 2>/dev/null || true
+	fi
+}
+
+logical_power_from_raw() {
+	raw="$1"
+	if [ "$PWR_ACTIVE_HIGH" = "1" ]; then
+		[ "$raw" = "1" ] && echo ON || echo OFF
+	else
+		[ "$raw" = "0" ] && echo ON || echo OFF
+	fi
+}
+
+logical_reset_from_raw() {
+	# active-low: raw 1 = released/inactive, raw 0 = asserted
+	raw="$1"
+	if [ "$RST_ACTIVE_LOW" = "1" ]; then
+		[ "$raw" = "0" ] && echo ASSERTED || echo RELEASED
+	else
+		[ "$raw" = "1" ] && echo ASSERTED || echo RELEASED
+	fi
+}
+
+cmd_status() {
+	echo "=== ct-cell status ==="
+	echo "gpio: chip=$CHIP pwr_offset=$PWR_OFFSET rst_offset=$RST_OFFSET"
+
+	if command -v gpioinfo >/dev/null 2>&1; then
+		gpioinfo "$CHIP" 2>/dev/null | grep -E "line[[:space:]]+(${PWR_OFFSET}|${RST_OFFSET}|6):|wwan_" || true
+	fi
+
+	# --- power line level ---
+	pwr_hold=$(find_gpioset_hold "$PWR_OFFSET" || true)
+	pwr_raw=$(gpio_raw_level "$PWR_OFFSET" || true)
+	if [ -n "$pwr_raw" ]; then
+		pwr_log=$(logical_power_from_raw "$pwr_raw")
+		if [ -n "$pwr_hold" ]; then
+			phold_pid=$(echo "$pwr_hold" | awk '{print $1}')
+			echo "power: $pwr_log  (raw=${pwr_raw}, active_high=${PWR_ACTIVE_HIGH}, hold pid=${phold_pid})"
+		else
+			echo "power: $pwr_log  (raw=${pwr_raw}, active_high=${PWR_ACTIVE_HIGH}, source=gpioget)"
+		fi
+	else
+		echo "power: UNKNOWN  (line busy or unreadable; no gpioset cmdline match)"
+	fi
+
+	# --- reset line level ---
+	rst_raw=$(gpio_raw_level "$RST_OFFSET" || true)
+	if [ -n "$rst_raw" ]; then
+		rst_log=$(logical_reset_from_raw "$rst_raw")
+		echo "reset: $rst_log  (raw=${rst_raw}, active_low=${RST_ACTIVE_LOW})"
+	else
+		echo "reset: UNKNOWN  (unreadable)"
+	fi
+
+	usb_present
+
+	# --- AT / SIM (auto port) ---
+	cands=$(at_list_candidate_ports | tr '\n' ' ')
+	if [ -z "$(echo "$cands" | tr -d ' ')" ]; then
+		echo "at: no ttyUSB/ttyACM devices"
+		echo "sim_ready: unknown"
+	else
+		echo "at: candidates:$cands"
+		if port=$(find_at_port 2>/dev/null); then
+			echo "at: port=$port (auto)"
+			cpin=$(at_exchange "$port" "AT+CPIN?" 2>/dev/null || true)
+			case "$cpin" in
+			*READY*) echo "sim_ready: yes" ;;
+			*"SIM PIN"*|*"SIM PUK"*) echo "sim_ready: no (PIN/PUK)" ;;
+			*)
+				echo "sim_ready: no"
+				echo "$cpin" | sed -n '1,6p' | sed 's/^/  /'
+				;;
+			esac
+		else
+			echo "at: no responding AT port among candidates"
+			echo "sim_ready: unknown"
+		fi
+	fi
+
+	if [ -f "$DIAL_PID_FILE" ] && kill -0 "$(cat "$DIAL_PID_FILE")" 2>/dev/null; then
+		echo "dialer: pid=$(cat "$DIAL_PID_FILE") alive"
+	else
+		echo "dialer: not running (pidfile)"
+	fi
+	ps aux 2>/dev/null | grep -E '[q]uectel-CM|[q]uectel-cm' || echo "dialer: no quectel-CM process"
+	echo "net:"
+	for i in wwan0 wwan1 usb0 usb1 rmnet_data0; do
+		[ -d "/sys/class/net/$i" ] && echo "  $i up" || true
+	done
+	if [ -f "$CFG_JSON" ]; then
+		echo "config: $CFG_JSON"
+		cat "$CFG_JSON"
+	else
+		echo "config: $CFG_JSON (missing)"
+	fi
+}
+
+main() {
+	cmd="${1:-help}"
+	[ "$#" -gt 0 ] && shift
+	case "$cmd" in
+	status) cmd_status "$@" ;;
+	power) cmd_power "$@" ;;
+	reset) cmd_reset "$@" ;;
+	dial) cmd_dial "$@" ;;
+	hangup|disconnect) cmd_hangup "$@" ;;
+	at) cmd_at "$@" ;;
+	sim) cmd_sim "$@" ;;
+	help|-h|--help) usage ;;
+	*)
+		usage >&2
+		exit 1
+		;;
+	esac
+}
+
+main "$@"

@@ -1,5 +1,5 @@
 diff --git a/arch/arm/dts/Makefile b/arch/arm/dts/Makefile
-index 9935f43c..2c64e488 100644
+index 9935f43..2c64e48 100644
 --- a/arch/arm/dts/Makefile
 +++ b/arch/arm/dts/Makefile
 @@ -1173,6 +1173,7 @@ dtb-$(CONFIG_TARGET_HAILO15_EVB_2_CAMERA_VPU) += hailo15-evb-2-camera-vpu.dtb
@@ -12,7 +12,7 @@ index 9935f43c..2c64e488 100644
  dtb-$(CONFIG_TARGET_HAILO15L_OREGANO) += hailo15l-oregano.dtb
 diff --git a/arch/arm/dts/hailo15-ne503.dts b/arch/arm/dts/hailo15-ne503.dts
 new file mode 100644
-index 00000000..c0bbcaad
+index 0000000..b72ef39
 --- /dev/null
 +++ b/arch/arm/dts/hailo15-ne503.dts
 @@ -0,0 +1,82 @@
@@ -99,7 +99,7 @@ index 00000000..c0bbcaad
 +	status = "okay";
 +};
 diff --git a/arch/arm/mach-hailo/Kconfig b/arch/arm/mach-hailo/Kconfig
-index 0b94eb9b..10492685 100644
+index 49efce8..ed7ce16 100644
 --- a/arch/arm/mach-hailo/Kconfig
 +++ b/arch/arm/mach-hailo/Kconfig
 @@ -417,6 +417,10 @@ config TARGET_HAILO12L_MAPLE
@@ -110,10 +110,10 @@ index 0b94eb9b..10492685 100644
 +	bool "Hailo15 NE503"
 +	select MACH_HAILO15
 +
- source "board/hailo/hailo15-vp/Kconfig"
- source "board/hailo/hailo15-ginger-soc/Kconfig"
- source "board/hailo/hailo15-ginger-soc-sdio0/Kconfig"
-@@ -439,5 +443,6 @@ source "board/hailo/hailo12l-evb/Kconfig"
+ config HAILO_SENSOR_DETECT
+ 	bool "Detect the fitted camera sensor at boot"
+ 	depends on MACH_HAILO15 || MACH_HAILO15L
+@@ -508,5 +512,6 @@ source "board/hailo/hailo12l-evb/Kconfig"
  source "board/hailo/hailo12l-veloce/Kconfig"
  source "board/hailo/hailo12l-mint/Kconfig"
  source "board/hailo/hailo12l-maple/Kconfig"
@@ -122,10 +122,10 @@ index 0b94eb9b..10492685 100644
  endif
 diff --git a/board/hailo/hailo15-ne503/Kconfig b/board/hailo/hailo15-ne503/Kconfig
 new file mode 100644
-index 00000000..d18c69b7
+index 0000000..1bbcd3b
 --- /dev/null
 +++ b/board/hailo/hailo15-ne503/Kconfig
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,16 @@
 +if TARGET_HAILO15_NE503
 +
 +config SYS_BOARD
@@ -142,20 +142,18 @@ index 00000000..d18c69b7
 +	  will be used for board configuration.
 +
 +endif
-+
 diff --git a/board/hailo/hailo15-ne503/Makefile b/board/hailo/hailo15-ne503/Makefile
 new file mode 100644
-index 00000000..b9238036
+index 0000000..c23d968
 --- /dev/null
 +++ b/board/hailo/hailo15-ne503/Makefile
-@@ -0,0 +1,4 @@
+@@ -0,0 +1,3 @@
 +# SPDX-License-Identifier: GPL-2.0
 +
 +obj- += dummy.o
-+
 diff --git a/configs/hailo15_ne503_defconfig b/configs/hailo15_ne503_defconfig
 new file mode 100644
-index 00000000..0b175008
+index 0000000..0b17500
 --- /dev/null
 +++ b/configs/hailo15_ne503_defconfig
 @@ -0,0 +1,8 @@
@@ -169,7 +167,7 @@ index 00000000..0b175008
 +CONFIG_PHY_SMSC=y
 diff --git a/include/configs/hailo15-ne503.h b/include/configs/hailo15-ne503.h
 new file mode 100644
-index 00000000..2afa8c8a
+index 0000000..2afa8c8
 --- /dev/null
 +++ b/include/configs/hailo15-ne503.h
 @@ -0,0 +1,33 @@
@@ -208,7 +206,7 @@ index 00000000..2afa8c8a
 + #endif /* __HAILO15_NE503_H */
 \ No newline at end of file
 diff --git a/include/configs/hailo1x_common.h b/include/configs/hailo1x_common.h
-index 804d30c2..3a79c960 100644
+index 804d30c..225397c 100644
 --- a/include/configs/hailo1x_common.h
 +++ b/include/configs/hailo1x_common.h
 @@ -38,6 +38,10 @@
@@ -222,14 +220,15 @@ index 804d30c2..3a79c960 100644
  #ifndef DEFAULT_BOOTDELAY
  #define DEFAULT_BOOTDELAY "2"
  #endif
-@@ -56,9 +60,9 @@
+@@ -55,10 +59,10 @@
+     "swupdate_server_udp_logging_port=12345\0" \
      "setup_swupdate_update_filename=setenv swupdate_update_filename hailo-update-image-${board}.swu\0" \
      "setup_swupdate_server_ip=if test -z \"${swupdate_server_ip}\"; then setenv swupdate_server_ip ${serverip}; fi; true\0" \
 -    "swupdate_update_modes=init-partitions-single,init-scu-bl,copy-a\0" \
-+    "swupdate_update_modes=init-partitions-dual,init-scu-bl,copy-a\0" \
 -    "append_bootargs_swupdate_server=setenv bootargs ${bootargs} SWUPDATE_SERVER_IP=${swupdate_server_ip} SWUPDATE_IPADDR=${ipaddr}\0" \
 -    "append_bootargs_swupdate_params=setenv bootargs ${bootargs} SWUPDATE_SERVER_UDP_LOGGING_PORT=${swupdate_server_udp_logging_port} SWUPDATE_UPDATE_FILENAME=${swupdate_update_filename} SWUPDATE_UPDATE_MODES=${swupdate_update_modes}\0" \
 -    "append_bootargs_swupdate_device=setenv bootargs ${bootargs} ${bootargs_swupdate_device}\0" \
++    "swupdate_update_modes=init-partitions-dual,init-scu-bl,copy-a\0" \
 +    "append_bootargs_swupdate_server=setenv bootargs \"${bootargs} SWUPDATE_SERVER_IP=${swupdate_server_ip} SWUPDATE_IPADDR=${ipaddr}\"\0" \
 +    "append_bootargs_swupdate_params=setenv bootargs \"${bootargs} SWUPDATE_SERVER_UDP_LOGGING_PORT=${swupdate_server_udp_logging_port} SWUPDATE_UPDATE_FILENAME=${swupdate_update_filename} SWUPDATE_UPDATE_MODES=${swupdate_update_modes}\"\0" \
 +    "append_bootargs_swupdate_device=setenv bootargs \"${bootargs} ${bootargs_swupdate_device}\"\0" \

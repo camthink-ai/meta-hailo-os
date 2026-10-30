@@ -3,6 +3,9 @@
  * Hailo15 NE503 (AM20-01-V1.0), aligned to hailo15-sbc-rev3-1.
  * With interface board CF66-01-V1.0: TF card on SDIO0 (VDD_SDCARD select on GPIO17),
  * NAU88C10 audio on I2C0 + I2S (H_I2C0_*, H_I2S_*).
+ * Cellular (M.2 + Quectel EM05-CN/E/G): USB2.0 data; GPIO23 module power
+ *   (H=ON), GPIO21 host reset (active-low), GPIO22 module wake-host
+ *   (active-low, PU 1.8V). GPIOs left free for userspace power sequencing.
  * Copyright (c) 2019-2025 Hailo Technologies Ltd. All rights reserved.
  */
 
@@ -264,13 +267,28 @@
 		groups = "usb_drive_vbus_out_2_grp";
 	};
 
+	pinctrl_gpio21: gpio21 {
+		function = "gpio";
+		groups = "gpio21_grp";
+	};
+
+	pinctrl_gpio22: gpio22 {
+		function = "gpio";
+		groups = "gpio22_grp";
+	};
+
+	pinctrl_gpio23: gpio23 {
+		function = "gpio";
+		groups = "gpio23_grp";
+	};
+
 	pinctrl_gpio27: gpio27 {
 		function = "gpio";
 		groups = "gpio27_grp";
 	};
 };
 
-/* AM20-01/CF66: pin names; GPIO17 = sdcard_vdd_sel (CF66 TF card) */
+/* AM20-01/CF66 + cellular: GPIO17 = sdcard_vdd_sel; GPIO21/22/23 = EM05 */
 #define GPIO_LINE_NAMES \
 	"gpio_in_out_0",            "gpio_in_out_1",            "gpio_in_out_2",            "gpio_in_out_3", \
 	"gpio_in_out_4",            "gpio_in_out_5",            "gpio_in_out_6",            "gpio_in_out_7", \
@@ -278,9 +296,9 @@
 	"usb_drive_vbus_out",       "sdio1_gp_in",              "sdio1_cd_in_n",            "PCIe_mperst_out", \
 	\
 	"gpio_in_out_16",           "sdcard_vdd_sel",            "timer_ext_in0",            "timer_ext_in1", \
-	"shut_down_out",            "user_LED",                 "gpio_in_out_22",           "gpio_in_out_23", \
+	"shut_down_out",            "wwan_reset_n",             "wwan_wake_host_n",         "wwan_pwr_on", \
 	"i2c2_current_src_en_out",  "i2c0_current_src_en_out",  "i2c1_current_src_en_out",  "gyro_int", \
-	"ir_cut_en",                "gpio_in_out_29",           "uart0_cts_pad_in",         "uart0_rts_pad_out"
+	"ir_cut_en",                "soft_reset_n",             "uart0_cts_pad_in",         "uart0_rts_pad_out"
 
 &gpio0 {
 	gpio-ranges = <&pinctrl 0 0 16>;
@@ -298,6 +316,13 @@
 &gpio1 {
 	gpio-ranges = <&pinctrl 0 16 16>;
 	gpio-line-names = GPIO_LINE_NAMES;
+	/*
+	 * EM05 (CN/E/G): GPIO21/22/23 named for userspace (gpio1 offsets
+	 * 5/6/7). Do NOT attach pinctrl-0 here — Hailo pinmux is strict; a
+	 * default state on the gpio controller claims the pins and blocks
+	 * gpiod/gpioset (gpioinfo shows "kernel input [used]"). Mux to GPIO
+	 * happens on request via gpiochip_generic_request.
+	 */
 };
 
 &hailo_torrent_phy {
