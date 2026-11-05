@@ -190,6 +190,14 @@ jobs:
             cp -L "${image_dir}/${file}" "${FIRMWARE_ARTIFACTS_DIR}/"
           done
 
+          # Optional alias/SKU DTBs (e.g. u-boot-v1.13-mt8g.dtb.signed).
+          # Does not match primary u-boot.dtb.signed (already staged above).
+          shopt -s nullglob
+          for f in "${image_dir}"/u-boot-*.dtb.signed; do
+            cp -L "${f}" "${FIRMWARE_ARTIFACTS_DIR}/"
+          done
+          shopt -u nullglob
+
           cp image-manifest.txt "${FIRMWARE_ARTIFACTS_DIR}/"
           ls -lah "${FIRMWARE_ARTIFACTS_DIR}"
 

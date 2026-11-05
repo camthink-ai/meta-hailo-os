@@ -27,5 +27,15 @@ DDR_DTSI:h9hcnnncpumlxr-4g-lp4 = "hailo1x_ddr_H9HCNNNCPUMLXR_NEE_regconfig_4GB_L
 
 DDR_DTSI ?= "hailo1x_ddr_MT53E512M32D1-046_regconfig_2GB_LP4X.dtsi"
 
+# One u-boot build also emits signed DTBs for these alias:profile pairs
+# (deployed as u-boot-${UBOOT_DDR_DTB_TAG}-<alias>.dtb.signed).
+# DDR_PROFILE still selects the primary u-boot.dtb.signed used for flashing.
+DDR_UBOOT_VARIANTS ?= "\
+    mt8g:mt53e2g32-8g-lp4 \
+    rs8g:rs2g32-8g-lp4 \
+    sk4g:h9hcnnncpumlxr-4g-lp4 \
+"
+UBOOT_DDR_DTB_TAG ?= "v1.13"
+
 # U-Boot board DTS to patch (machine-specific basename under arch/arm/dts/).
 UBOOT_BOARD_DTS ??= ""

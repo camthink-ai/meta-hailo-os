@@ -1,0 +1,30 @@
+diff --git a/board/hailo/common/hailo15_board.c b/board/hailo/common/hailo15_board.c
+index 1111111..2222222 100644
+--- a/board/hailo/common/hailo15_board.c
++++ b/board/hailo/common/hailo15_board.c
+@@ -298,7 +298,24 @@
+ 
+ int misc_init_r(void)
+ {
+-    int ret = 0;
++	int ret = 0;
++	int node, len;
++	const char *pn;
++
++	/*
++	 * Print the DDR profile name baked into the control DTB so operators
++	 * can confirm which u-boot.dtb.signed / DDR_PROFILE was flashed.
++	 */
++	node = fdt_path_offset(gd->fdt_blob, "/hailo_boot_info/ddr_config");
++	if (node >= 0) {
++		pn = fdt_getprop(gd->fdt_blob, node, "assembled_dram_pn", &len);
++		if (pn && len > 0) {
++			printf("DDR: %s (%llu MiB usable)\n",
++			       pn, (unsigned long long)(gd->ram_size >> 20));
++			env_set("assembled_dram_pn", pn);
++		}
++	}
++
+     env_set_hex("active_boot_image_offset", active_boot_image_offset);
+     env_set_ulong("active_boot_image_storage", active_boot_image_storage);
+     env_set_ulong("boot_image_mode", boot_image_mode);
