@@ -72,15 +72,35 @@ jobs:
         run: |
           mkdir -p "${SSTATE_DIR}" "${DL_DIR}" "${KAS_WORK_DIR}/build"
 
-      - name: Check inotify limits
+      - name: Ensure inotify limits
         run: |
+          # BitBake needs a high max_user_watches. max_user_instances is helpful
+          # but not a hard gate here — this runner previously completed full
+          # builds with the kernel default (128) when watches were already high.
+          desired_watches=1048576
+          desired_instances=8192
+          min_watches=524288
+
+          # Best-effort raise (needs passwordless sudo on the self-hosted runner).
+          if command -v sudo >/dev/null 2>&1; then
+            sudo -n sysctl -w \
+              "fs.inotify.max_user_watches=${desired_watches}" \
+              "fs.inotify.max_user_instances=${desired_instances}" \
+              2>/dev/null || true
+          fi
+
           watches="$(sysctl -n fs.inotify.max_user_watches)"
           instances="$(sysctl -n fs.inotify.max_user_instances)"
           echo "fs.inotify.max_user_watches=${watches}"
           echo "fs.inotify.max_user_instances=${instances}"
-          if [ "$watches" -lt 524288 ] || [ "$instances" -lt 1024 ]; then
-            echo "::error::Inotify limits are too low for BitBake. On the self-hosted runner, run: sudo sysctl -w fs.inotify.max_user_watches=1048576 fs.inotify.max_user_instances=8192"
+
+          if [ "$watches" -lt "$min_watches" ]; then
+            echo "::error::fs.inotify.max_user_watches=${watches} is too low for BitBake (need >= ${min_watches}). Persist on the runner: echo 'fs.inotify.max_user_watches=${desired_watches}' | sudo tee /etc/sysctl.d/99-inotify.conf && sudo sysctl --system"
             exit 1
+          fi
+
+          if [ "$instances" -lt 1024 ]; then
+            echo "::warning::fs.inotify.max_user_instances=${instances} is low (recommend >= 1024). Persist on the runner: echo 'fs.inotify.max_user_instances=${desired_instances}' | sudo tee -a /etc/sysctl.d/99-inotify.conf && sudo sysctl --system"
           fi
 
       - name: Print build context
