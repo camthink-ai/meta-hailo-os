@@ -1,0 +1,12 @@
+# CamThink NE503 core SWU entry (slim rootfs).
+# Drops hailo-dev-pkg extras (CLIP HEFs, medialib tuning, imaging .a, etc.).
+# Dev/debug builds keep using kas/hailo15-ne503.yml.
+#
+# Usage: kas build kas/hailo15-ne503-core.yml
+build_system: openembedded
+header:
+  version: 11
+  includes:
+  - hailo15-core.yml
+  - hailo15-ne503-machine.yml
+  - hailo15-ne503-aipc.yml

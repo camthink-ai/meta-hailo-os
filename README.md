@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **Layer** | `meta-hailo-camthink` |
-| **Machines** | `hailo15-ne503`, `hailo15-sbc` |
+| **Machines** | `hailo15-ne503` |
 
 ## Prerequisites
 
@@ -20,8 +20,17 @@
 ```bash
 git clone https://github.com/camthink-ai/meta-hailo-os.git
 cd meta-hailo-os
+
+# Dev / debug image + SWU (hailo-dev-pkg; larger)
 kas build kas/hailo15-ne503.yml
+
+# Core / slim image + SWU (hailo-core; smaller OTA)
+kas build kas/hailo15-ne503-core.yml
 ```
+
+`hailo15-ne503-core.yml` builds `core-image-hailo` + `hailo-update-image-core-*`
+without `hailo-dev-pkg` extras (CLIP/demo HEFs, medialib tuning tools, imaging
+static libs, perfetto). Use it for release OTA; keep `hailo15-ne503.yml` for lab/dev.
 
 ### Toolchain (SDK)
 
@@ -29,6 +38,8 @@ kas build kas/hailo15-ne503.yml
 source poky/oe-init-build-env
 # Build SDK for current image
 bitbake core-image-hailo-dev -c populate_sdk
+# Or production image SDK:
+# bitbake core-image-hailo -c populate_sdk
 # Or minimal toolchain only
 bitbake meta-toolchain
 ```
@@ -50,7 +61,7 @@ After `bitbake`, images appear under `build/tmp/deploy/images/<MACHINE>/` (adjus
 
 | Path | Description |
 |------|-------------|
-| `kas/` | KAS configs; entries `hailo15-ne503.yml`, `hailo15-sbc.yml` |
+| `kas/` | KAS configs; entries `hailo15-ne503.yml` (dev), `hailo15-ne503-core.yml` (slim) |
 | `meta-hailo-camthink/` | BSP layer (conf, machine, recipes-*) |
 
 ## Contact

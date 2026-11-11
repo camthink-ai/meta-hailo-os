@@ -26,7 +26,7 @@ jobs:
       matrix:
         kas_config:
           - kas/hailo15-ne503.yml
-          - kas/hailo15-sbc.yml
+          - kas/hailo15-ne503-core.yml
 
     steps:
       - name: Checkout repository

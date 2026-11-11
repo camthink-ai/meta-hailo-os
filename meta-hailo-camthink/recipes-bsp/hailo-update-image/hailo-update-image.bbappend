@@ -1,4 +1,10 @@
-# Hailo15-NE503: same as hailo15-sbc (mmcblk1 for rootfs)
+# Distinguish deploy SWU names by rootfs flavor (avoids core/dev clobbering
+# the same hailo-update-image-${MACHINE}.swu symlink):
+#   core-image-hailo-dev → hailo-update-image-dev-${MACHINE}.swu
+#   core-image-hailo     → hailo-update-image-core-${MACHINE}.swu
+IMAGE_BASENAME = "hailo-update-image-${@bb.utils.contains('HAILO_TARGET', 'core-image-hailo-dev', 'dev', 'core', d)}"
+
+# Hailo15-NE503: rootfs on mmcblk1
 SWUPDATE_DEFAULT_FILESYSTEM_DEVICE:hailo15-ne503 = "mmcblk1"
 
 # Override sw-description for hailo15-ne503 (single mode gets a data partition)

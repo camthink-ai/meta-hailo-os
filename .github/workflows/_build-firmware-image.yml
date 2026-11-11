@@ -167,6 +167,17 @@ jobs:
           rm -rf "${FIRMWARE_ARTIFACTS_DIR}"
           mkdir -p "${FIRMWARE_ARTIFACTS_DIR}"
 
+          # SWU basename is flavored by HAILO_TARGET (see hailo-update-image.bbappend):
+          # core → core; -dev → dev. Fall back to unflavored for older trees.
+          case "${KAS_CONFIG}" in
+            *ne503-core*|*hailo15-core*|*mini*|*prod*) swu_flavor=core ;;
+            *) swu_flavor=dev ;;
+          esac
+          swu_file="hailo-update-image-${swu_flavor}-${machine}.swu"
+          if [ ! -e "${image_dir}/${swu_file}" ]; then
+            swu_file="hailo-update-image-${machine}.swu"
+          fi
+
           required_files="
           hailo15_uart_recovery_fw.bin
           hailo15_scu_bl.bin
@@ -179,7 +190,7 @@ jobs:
           u-boot-tfa.itb
           fitImage
           swupdate-image-${machine}.ext4.gz
-          hailo-update-image-${machine}.swu
+          ${swu_file}
           "
 
           for file in $required_files; do

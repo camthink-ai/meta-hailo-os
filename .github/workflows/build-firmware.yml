@@ -17,7 +17,7 @@ on:
         default: 'kas/hailo15-ne503.yml'
         options:
           - kas/hailo15-ne503.yml
-          - kas/hailo15-sbc.yml
+          - kas/hailo15-ne503-core.yml
       upload_artifacts:
         description: 'Upload firmware image artifacts'
         required: true

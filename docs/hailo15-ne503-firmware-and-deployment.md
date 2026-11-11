@@ -1,6 +1,15 @@
 # Hailo-15 (NE503) firmware recovery and system deployment
 
-This guide describes how to recover low-level firmware and deploy the Linux system on a **Hailo-15 (NE503)** module from an **Ubuntu** host using **UART** and **TFTP**. Commands use example paths; replace `<MACHINE>` (`hailo15-ne503`, `hailo15-sbc`, etc.) and serial devices with values that match your setup.
+This guide describes how to recover low-level firmware and deploy the Linux system on a **Hailo-15 (NE503)** module from an **Ubuntu** host using **UART** and **TFTP**. Commands use example paths; replace `<MACHINE>` (`hailo15-ne503`) and serial devices with values that match your setup.
+
+Build entries:
+
+| KAS config | Image / SWU | Use |
+|------------|-------------|-----|
+| `kas/hailo15-ne503.yml` | `core-image-hailo-dev` + `hailo-update-image-dev-hailo15-ne503.swu` | Lab / debug (`hailo-dev-pkg`) |
+| `kas/hailo15-ne503-core.yml` | `core-image-hailo` + `hailo-update-image-core-hailo15-ne503.swu` | Release OTA (slim `hailo-core`) |
+
+Artifacts land under `tmp/deploy/images/hailo15-ne503/`.
 
 ---
 
@@ -124,7 +133,8 @@ BUILD=build
 MACHINE=hailo15-ne503
 sudo cp ${BUILD}/tmp/deploy/images/${MACHINE}/fitImage /var/lib/tftpboot/
 sudo cp ${BUILD}/tmp/deploy/images/${MACHINE}/swupdate-image-${MACHINE}.ext4.gz /var/lib/tftpboot/
-sudo cp ${BUILD}/tmp/deploy/images/${MACHINE}/hailo-update-image-${MACHINE}.swu /var/lib/tftpboot/
+# Use -core or -dev to match the KAS entry you built.
+sudo cp ${BUILD}/tmp/deploy/images/${MACHINE}/hailo-update-image-core-${MACHINE}.swu /var/lib/tftpboot/
 ```
 
 Adjust `BUILD` if your OpenEmbedded build directory is not named `build`.

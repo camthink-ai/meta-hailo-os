@@ -1,0 +1,8 @@
+# Production / slim image base (no hailo-dev-pkg, no perfetto extras).
+build_system: openembedded
+header:
+  version: 11
+  includes:
+  - includes/yocto-base.yml
+  - includes/hailo15-vpu-base.yml
+  - includes/hailo-soc-target-core-image-hailo.yml

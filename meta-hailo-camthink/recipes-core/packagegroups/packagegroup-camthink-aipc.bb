@@ -22,6 +22,11 @@ RDEPENDS:${PN}-system = " \
     aipc-bootstrap \
     quectel-cm \
     camthink-rootfs \
+    libavcodec \
+    libavutil \
+    libswresample \
+    run-swupdate-script \
+    swupdate \
 "
 
 # Part 2: CamThink AIPC application
