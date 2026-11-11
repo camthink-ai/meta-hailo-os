@@ -115,13 +115,52 @@ jobs:
       - name: Resolve machine name
         id: machine
         run: |
-          config_base="$(basename "${KAS_CONFIG}" .yml)"
-          machine_file="kas/${config_base}-machine.yml"
-          machine="$(awk '/^machine:/{print $2; exit}' "$machine_file" 2>/dev/null || true)"
-          if [ -z "$machine" ] || [ "$machine" = "unset" ]; then
-            echo "Could not read machine from ${machine_file}" >&2
+          # Flavored entries (e.g. hailo15-ne503-core.yml) share a machine
+          # include such as hailo15-ne503-machine.yml — do not derive
+          # <config>-machine.yml from the entry basename alone.
+          set -euo pipefail
+          echo "KAS_CONFIG=${KAS_CONFIG}"
+          ls -la kas/*machine*.yml || true
+
+          machine_file=""
+          include_machine="$(
+            grep -E '^[[:space:]]*-[[:space:]]*[^#]*-machine\.yml[[:space:]]*$' "${KAS_CONFIG}" \
+              | head -n1 \
+              | sed -E 's/^[[:space:]]*-[[:space:]]*//; s/[[:space:]]+$//; s/["'\'']//g' \
+              || true
+          )"
+          echo "include_machine=${include_machine:-<none>}"
+
+          if [ -n "${include_machine}" ] && [ -f "kas/${include_machine}" ]; then
+            machine_file="kas/${include_machine}"
+          elif [ -n "${include_machine}" ] && [ -f "${include_machine}" ]; then
+            machine_file="${include_machine}"
+          else
+            config_base="$(basename "${KAS_CONFIG}" .yml)"
+            # Strip trailing flavor suffixes before the legacy lookup.
+            for candidate in \
+              "kas/${config_base%-core}-machine.yml" \
+              "kas/${config_base%-dev}-machine.yml" \
+              "kas/${config_base}-machine.yml"
+            do
+              if [ -f "${candidate}" ]; then
+                machine_file="${candidate}"
+                break
+              fi
+            done
+          fi
+
+          if [ -z "${machine_file}" ] || [ ! -f "${machine_file}" ]; then
+            echo "Could not locate machine yml for kas=${KAS_CONFIG}" >&2
             exit 1
           fi
+
+          machine="$(awk '/^machine:/{print $2; exit}' "${machine_file}" || true)"
+          if [ -z "${machine}" ] || [ "${machine}" = "unset" ]; then
+            echo "Could not read machine from ${machine_file} (kas=${KAS_CONFIG})" >&2
+            exit 1
+          fi
+          echo "Resolved machine=${machine} from ${machine_file}"
           echo "name=${machine}" >> "${GITHUB_OUTPUT}"
 
       - name: Build firmware with KAS
