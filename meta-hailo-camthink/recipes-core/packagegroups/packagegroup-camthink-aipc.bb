@@ -27,6 +27,7 @@ RDEPENDS:${PN}-system = " \
     libswresample \
     run-swupdate-script \
     swupdate \
+    tzdata \
 "
 
 # Part 2: CamThink AIPC application
