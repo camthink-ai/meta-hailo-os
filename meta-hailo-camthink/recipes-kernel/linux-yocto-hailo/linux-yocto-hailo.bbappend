@@ -7,6 +7,7 @@ SRC_URI:append:hailo15-ne503 = " \
     file://0003-hailo15-ne503-sdio0-volt33-hs.patch \
     file://0004-hailo15-ne503-em05-cellular.patch \
     file://0005-hailo15-isp-afm-overflow-ratelimit.patch \
+    file://0006-hailo15-ne503-usb2-only-no-torrent.patch \
 "
 
 # cfg

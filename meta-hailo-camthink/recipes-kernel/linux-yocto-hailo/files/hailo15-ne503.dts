@@ -6,6 +6,8 @@
  * Cellular (M.2 + Quectel EM05-CN/E/G): USB2.0 data; GPIO23 module power
  *   (H=ON), GPIO21 host reset (active-low), GPIO22 module wake-host
  *   (active-low, PU 1.8V). GPIOs left free for userspace power sequencing.
+ * No external PCIe / USB3 SerDes on current BOM: keep hailo_pci_ep_driver and
+ *   hailo_torrent_phy disabled. Host uses SoC USB2 PHY only (EM05 is USB2.0).
  * Copyright (c) 2019-2025 Hailo Technologies Ltd. All rights reserved.
  */
 
@@ -325,29 +327,17 @@
 	 */
 };
 
-&hailo_torrent_phy {
-	status = "okay";
-	usb-lane = <3>;
-	usb-lane-pma-pll-full-rate-divider = <PCI_PMA_PLL_FULL_RATE_CLK_DIVIDER_4>;
-	lanes-config = <PCI_PHY_LINK_LANES_CFG__2x1_PLUS_1x2__MASTER_LANES_LN0_LN2_LN3>;
+/*
+ * No external PCIe chip and no USB3 SerDes use on this BOM. Disable PCI EP and
+ * the Cadence Torrent wrapper so we never wait on PCIE_REFCLK / CMN ready.
+ * USB host below uses the integrated USB2 PHY only (Quectel EM05 is USB2.0).
+ */
+&hailo_pci_ep_driver {
+	status = "disabled";
 };
 
-&cdns_torrent_phy {
-	torrent_phy_pcie: phy@0 {
-		reg = <0>;
-		resets = <&scmi_reset HAILO15_SCMI_RESET_IDX_PCIE_PHY_LANE_0>, <&scmi_reset HAILO15_SCMI_RESET_IDX_PCIE_PHY_LANE_1>;
-		#phy-cells = <0>;
-		cdns,phy-type = <PHY_TYPE_PCIE>;
-		cdns,num-lanes = <2>;
-	};
-	torrent_phy_usb3: phy@3 {
-		reg = <3>;
-		resets = <&scmi_reset HAILO15_SCMI_RESET_IDX_PCIE_PHY_LANE_3>;
-		#phy-cells = <0>;
-		cdns,phy-type = <PHY_TYPE_USB3>;
-		cdns,num-lanes = <1>;
-		cdns,ssc-mode = <TORRENT_SERDES_NO_SSC>;
-	};
+&hailo_torrent_phy {
+	status = "disabled";
 };
 
 &hailo_usb3 {
@@ -358,10 +348,10 @@
 
 &cdns_usb3 {
 	dr_mode = "host";
-	phys = <&torrent_phy_usb3>;
-	phy-names = "cdns3,usb3-phy";
+	/* USB2-only: do not bind cdns3,usb3-phy (Torrent); SoC USB2 PHY is enough. */
+	maximum-speed = "high-speed";
 	pinctrl-names = "default";
-    pinctrl-0 = <&pinctrl_usb_drive_vbus_out>;
+	pinctrl-0 = <&pinctrl_usb_drive_vbus_out>;
 };
 
 &reserved_memory {
