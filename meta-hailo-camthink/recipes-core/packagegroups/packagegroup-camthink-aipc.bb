@@ -21,6 +21,7 @@ RDEPENDS:${PN}-system = " \
     u-boot-fw-utils \
     aipc-bootstrap \
     quectel-cm \
+    quectel-qlog \
     camthink-rootfs \
     libavcodec \
     libavutil \
